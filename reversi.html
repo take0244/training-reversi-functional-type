@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+    <title>オセロ</title>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <link rel='stylesheet' type='text/css' media='screen' href='main.css'>
+    <script src='main.js'></script>
+</head>
+<body>
+    <canvas id="target" height="800" width="800"></canvas>
+    <script type="text/javascript">
+        const SIZE = 800;
+        const TROUT = 6;
+        const canvas = document.getElementById("target");
+        const ctx = canvas.getContext( "2d" );
+        const COLOR_WHITE = "#FFFFFF";
+        const COLOR_BLACK = "#000000";
+        const seed = Math.floor(Math.random() * TROUT * TROUT * 0.7);
+        const map = (() => {
+            const result = [];
+            for (let i = 0; i < TROUT; i++) {
+                result.push([]);
+                for (let j = 0; j < TROUT; j++) {
+                        result[i].push(null);
+                }
+            }
+
+            return result;
+        })();
+
+        function isInsideMap(x, y) {
+            return map.length > x-1 && x-1 >= 0 && map[x-1].length > y-1 && y-1 >= 0; 
+        }
+        function isFullMap() {
+            for (let i = 0; i < map.length; i++) {
+                for (let j = 0; j < map[i].length; j++) {
+                   if (map[i][j] === null) return false;
+                }
+            }
+            return true;
+        }
+        function findMaxPoint(color) {
+            let max = -1;
+            let point = {x: -1, y: -1};
+            for (let i = 0; i < map.length; i++) {
+                for (let j = 0; j < map[i].length; j++) {
+                    if (map[i][j] !== null) continue;
+                    const directions = getPuttableCount(i+1, j+1, color);
+                    const sum = Object.entries(directions)
+                        .reduce((pre, [fn, cnt]) => pre + cnt, 0);
+                    if (sum > max) {
+                        max = sum;
+                        point.x = i+1;
+                        point.y = j+1;
+                    }
+                }
+            }
+            return (point.x === -1) ? {} : point;
+        }
+        function findMinPoint(color) {
+            let min = 99999999999999999;
+            let point = {x: -1, y: -1};
+            for (let i = 0; i < map.length; i++) {
+                for (let j = 0; j < map[i].length; j++) {
+                    if (map[i][j] !== null) continue;
+                    const directions = getPuttableCount(i+1, j+1, color);
+                    const sum = Object.entries(directions)
+                        .reduce((pre, [fn, cnt]) => pre + cnt, 0);
+                    if (sum < min && sum > 0) {
+                        min = sum;
+                        point.x = i+1;
+                        point.y = j+1;
+                    }
+                }
+            }
+            return (point.x === -1) ? {} : point;
+        }
+        function isPuttable(color) {
+           for (let i = 0; i < map.length; i++) {
+                for (let j = 0; j < map[i].length; j++) {
+                    if (map[i][j] !== null) continue;
+                    const directions = getPuttableCount(i+1, j+1, color);
+                    const sum = Object.entries(directions)
+                        .reduce((pre, [fn, cnt]) => pre + cnt, 0);
+                    if (sum > 0) {
+                       return true;
+                    }
+                }
+            }
+            return false;
+        }
+        function countColor(color) {
+            let cnt = 0;
+            for (let i = 0; i < map.length; i++) {
+                for (let j = 0; j < map[i].length; j++) {
+                    if (map[i][j] === color) cnt++;
+                }
+            }
+            return cnt;
+        }
+        function countNotNull() {
+            let cnt = 0;
+            for (let i = 0; i < map.length; i++) {
+                for (let j = 0; j < map[i].length; j++) {
+                    if (map[i][j] !== null) cnt++;
+                }
+            }
+            return cnt;
+        }
+        function getMapColor(x, y) {
+            return map[x-1][y-1];
+        }
+        function setMapColor(x, y, color) {
+            map[x-1][y-1] = color
+        }
+
+        
+        function setStone(x, y, color) {
+            function drawCycle(x, y, color) {
+                x = SIZE/TROUT*x - (SIZE/TROUT/2);
+                y = SIZE/TROUT*y - (SIZE/TROUT/2);
+                ctx.beginPath();
+                ctx.arc(x, y, SIZE/TROUT/2*0.75, 0*Math.PI/180, 360*Math.PI/180, false);
+                ctx.fillStyle = color;
+                ctx.fill();
+            }
+            if (!isInsideMap(x, y)) return;
+            drawCycle(x, y, color);
+            setMapColor(x, y, color);
+        }
+
+        function drawBoard() {
+            const drawRect = () => {
+                ctx.beginPath();
+                ctx.rect(0, 0, SIZE, SIZE);
+                ctx.fillStyle = "#007F00";
+                ctx.fill();
+            };
+            const drawLine = () => {
+                const oneLineLength = SIZE/TROUT;
+                ctx.beginPath();
+                for (let i = 1; i <= TROUT; i++) {
+                    // 横ライン
+                    ctx.moveTo(0, i*oneLineLength);
+                    ctx.lineTo(SIZE, i*oneLineLength);
+
+                    // 縦ライン
+                    ctx.moveTo(i*oneLineLength, 0);
+                    ctx.lineTo(i*oneLineLength, SIZE);
+
+                    ctx.closePath();
+                    ctx.stroke();
+                }
+                
+            };
+            const setInitStone = () => {
+                setStone(TROUT/2, TROUT/2, COLOR_BLACK);
+                setStone(TROUT/2+1, TROUT/2, COLOR_WHITE);
+                setStone(TROUT/2, TROUT/2+1, COLOR_WHITE);
+                setStone(TROUT/2+1, TROUT/2+1, COLOR_BLACK);
+            }
+
+            drawRect();
+            drawLine();
+            setInitStone();
+        }
+
+        function getPuttableCount(x, y, color) {
+            const getN = (x, y) => ({x, y: y-1});
+            const getS = (x, y) => ({x, y: y+1});
+            const getW = (x, y) => ({x: x+1, y});
+            const getE = (x, y) => ({x: x-1, y});
+            const getSE = (x, y) => ({x: x-1, y: y+1});
+            const getSW = (x, y) => ({x: x+1, y: y+1});
+            const getNE = (x, y) => ({x: x-1, y: y-1});
+            const getNW = (x, y) => ({x: x+1, y: y-1});
+
+            let result = {};
+
+            [getN, getS, getW, getE, getSE, getSW, getNE, getNW].forEach(direction => {
+                let tmpCnt = 0;
+                const point = direction(x, y);
+                if (!isInsideMap(point.x, point.y) || getMapColor(point.x, point.y) === color || getMapColor(point.x, point.y) === null) return;
+                else tmpCnt++;
+
+                const checkNext = (x, y) => {
+                    const point = direction(x, y);
+                    if (!isInsideMap(point.x, point.y) || getMapColor(point.x, point.y) === null) {
+                        tmpCnt = 0;
+                        return
+                    }
+                    if (getMapColor(point.x, point.y) !== color) tmpCnt++;
+                    else return;
+                    
+                    checkNext(point.x, point.y);
+                };
+
+                checkNext(point.x, point.y);
+                if (tmpCnt > 0) result[direction] = tmpCnt;
+            })
+
+            return result;
+        }
+        function reverse(x, y, color) {
+            const directions = getPuttableCount(x, y, color);
+            if (Object.keys(directions).length > 0) {
+                setStone(x, y, color);
+                Object.entries(directions).forEach(([fn, cnt]) => {
+                    let p = {x, y};
+                    for (let i = 0; i < cnt; i++) {
+                        p = eval(fn)(p.x, p.y);
+                        setStone(p.x, p.y, color);
+                    }
+                });
+                return true;
+            }
+
+            return false;
+        }
+        
+        function fCPU (color) {
+            const point  = (countNotNull() > seed) ? findMinPoint(color) : findMaxPoint(color);
+            if (Object.keys(point).length === 0) return false;
+            return reverse(point.x, point.y, color);
+        }
+
+        
+        
+        // main 処理
+        drawBoard();
+        const myColor = COLOR_BLACK;
+        const enemyColor = COLOR_WHITE;
+        let processing = false;
+        canvas.addEventListener('click', (e) => {
+            const getXY = () => {
+                const rect = e.target.getBoundingClientRect();
+                x = e.clientX - rect.left;
+                y = e.clientY - rect.top;
+                x = Math.ceil(x*TROUT/SIZE);
+                y = Math.ceil(y*TROUT/SIZE);
+                return {x, y};
+            };
+
+            if (processing) return;
+            processing = true;
+    
+            let point = getXY();
+            if (getMapColor(point.x, point.y) !== null) {
+                processing = false;
+                return;
+            }
+
+            if (reverse(point.x, point.y, myColor)) {
+                setTimeout(()=> {
+                    let putted = false;
+                    do {
+                       if (!fCPU(enemyColor) && !putted) alert("置けねぇ");
+                       putted = true;
+                    } while(!isPuttable(myColor) && isPuttable(enemyColor));
+                    
+                    const myCnt = countColor(myColor);
+                    const enemyCnt = countColor(enemyColor);
+                    if (isFullMap() || (!isPuttable(myColor) && !isPuttable(enemyColor))) {
+                        if (myCnt === enemyCnt) alert("引き分け");
+                        else if (myCnt > enemyCnt) alert("あなたの勝ち!!!");
+                        else alert("どんまい???");
+                    } else {
+                        if (myCnt === 0) alert("どんまい");
+                        else if(enemyCnt === 0) alert("あなたの勝ち");
+                    }
+                    processing = false;
+               
+                }, 400);
+            } else {
+                processing = false;
+            }
+        }, false);
+    </script>
+</body>
+</html>
